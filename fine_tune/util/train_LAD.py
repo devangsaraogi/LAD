@@ -99,7 +99,10 @@ def train_LAD(
 
     skip = t_layer_num // student_config.num_hidden_layers
     # teacher_indices = list(range(skip-1, t_layer_num, skip))
-    teacher_indices = list(range(len(teacher_hiddens)))
+    # teacher_indices = list(range(len(teacher_hiddens)))
+    t_layer_num = len(teacher_model.encoder.layer)
+    teacher_indices = list(range(t_layer_num))
+    
     if student_init == 'even':
         print("Warning!: Use even layers of the teacher model to init the student.")
         init_indices = teacher_indices
