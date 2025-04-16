@@ -13,6 +13,7 @@ import argparse
 import logging
 import os
 import re
+import time
 
 # 3rd-party modules
 
@@ -22,6 +23,8 @@ import torch.utils.data
 import torch.utils.tensorboard
 import pandas as pd
 import numpy as np
+from torch.utils.flop_counter import FlopCounterMode
+import torch.cuda as cuda
 
 # my own modules
 
@@ -170,6 +173,11 @@ if __name__ == '__main__':
         model = fine_tune.util.load_teacher_model_by_config(
             config=config
         )
+        def count_parameters(model):
+            return sum(p.numel() for p in model.parameters() if p.requires_grad)
+
+        total_params = count_parameters(model)
+        logger.info(f"Total Trainable Parameters: {total_params:,}")
     # Load student tokenizer and model.
     else:
         tokenizer = fine_tune.util.load_student_tokenizer_by_config(
@@ -179,6 +187,11 @@ if __name__ == '__main__':
             config=config,
             tokenizer=tokenizer
         )
+        def count_parameters(model):
+            return sum(p.numel() for p in model.parameters() if p.requires_grad)
+
+        total_params = count_parameters(model)
+        logger.info(f"Total Trainable Parameters: {total_params:,}")
 
     # Get experiment name and path.
     experiment_name = fine_tune.config.BaseConfig.experiment_name(
@@ -253,6 +266,22 @@ if __name__ == '__main__':
                 map_location=config.device
             )
         )
+#change
+        dummy_input = {
+                'input_ids': torch.ones(1, 128, dtype=torch.long).to(config.device),
+                'attention_mask': torch.ones(1, 128, dtype=torch.long).to(config.device)
+        }
+
+        with FlopCounterMode(model) as flop_counter:
+            with torch.no_grad():
+                _= model(**dummy_input)
+
+        flops_per_sample = flop_counter.get_total_flops() / 128  # seq_len=128
+        logger.info(f"FLOPs/sample: {flops_per_sample:.0f}")
+
+        cuda.reset_peak_memory_stats()
+#endofchange
+
         if config.task == 'cola':
             mcc, loss = fine_tune.util.evaluate_matthews_corrcoef(
                 config=config,
@@ -359,6 +388,29 @@ if __name__ == '__main__':
                     ckpt
                 )
 
+#change
+        peak_mem = cuda.max_memory_allocated() / 1024**3  # Convert to GB
+        results.setdefault('gpu_mem', []).append(peak_mem)
+        logger.info(f"Peak GPU Memory: {peak_mem:.2f}GB")
+
+    if all_ckpts:
+    # Get creation times of first and last checkpoints
+        first_ckpt_path = os.path.join(experiment_dir, f'model-{all_ckpts[0]}.pt')
+        last_ckpt_path = os.path.join(experiment_dir, f'model-{all_ckpts[-1]}.pt')
+    
+        start_time = os.path.getctime(first_ckpt_path)
+        end_time = os.path.getctime(last_ckpt_path)
+        total_hours = (end_time - start_time) / 3600
+    
+        logger.info(f"Total Training Time: {total_hours:.1f} hours")
+        results['training_time'] = total_hours
+
+    logger.info("\n=== Efficiency Metrics ===")
+    logger.info(f"{'Metric':<15} | {'Your Model':<12}")
+    logger.info(f"{'Peak GPU Mem':<15} | {max(results['gpu_mem']):.1f}GB")
+    logger.info(f"{'Training Time':<15} | {results['training_time']:.1f}h")
+#endofchange
+    
     # Release IO resources.
     writer.flush()
     writer.close()
