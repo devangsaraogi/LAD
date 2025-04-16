@@ -35,6 +35,7 @@ import fine_tune.task
 import fine_tune.model
 import fine_tune.path
 
+
 def train_LAD(
     teacher_config: fine_tune.config.TeacherConfig,
     student_config: fine_tune.config.StudentConfig,
@@ -97,16 +98,18 @@ def train_LAD(
         t_layer_num = 24
 
     skip = t_layer_num // student_config.num_hidden_layers
-    teacher_indices = list(range(skip-1, t_layer_num, skip))
+    # teacher_indices = list(range(skip-1, t_layer_num, skip))
+    teacher_indices = list(range(len(teacher_hiddens)))
     if student_init == 'even':
         print("Warning!: Use even layers of the teacher model to init the student.")
         init_indices = teacher_indices
     elif student_init == 'first':
-        print(f"Warning!: Use the first {student_config.num_hidden_layers} layers of the teacher model to init the student.")
+        print(
+            f"Warning!: Use the first {student_config.num_hidden_layers} layers of the teacher model to init the student.")
         init_indices = [*range(student_config.num_hidden_layers)]
 
     # Init student model from pre-trained teacher layer.
-    
+
     student_model.init_from_pre_trained(
         teacher_indices=init_indices
     )
@@ -174,12 +177,11 @@ def train_LAD(
     batch_logits_loss = 0
     batch_hidden_loss = 0
 
-
     # `tqdm` CLI Logger. We will manually update progress bar.
     cli_logger = tqdm(
         desc=f'loss: {loss:.6f} ' +
-            f'logits_loss: {logits_loss:.6f} ' +
-            f'hidden_loss: {hidden_loss:.6f} ',
+        f'logits_loss: {logits_loss:.6f} ' +
+        f'hidden_loss: {hidden_loss:.6f} ',
         total=student_config.total_step
     )
 
@@ -223,7 +225,7 @@ def train_LAD(
             # Get output logits, hidden states and attentions from teacher and student.
             with torch.no_grad():
                 teacher_logits, teacher_hiddens, _ = teacher_model(
-                    input_ids = teacher_input_ids.to(teacher_device),
+                    input_ids=teacher_input_ids.to(teacher_device),
                     token_type_ids=teacher_token_type_ids.to(teacher_device),
                     attention_mask=teacher_attention_mask.to(teacher_device),
                     return_hidden_and_attn=True
@@ -231,7 +233,7 @@ def train_LAD(
 
             # Get output logits, hidden states and attentions from student.
             student_logits, student_hiddens, _ = student_model(
-                input_ids = student_input_ids.to(student_device),
+                input_ids=student_input_ids.to(student_device),
                 token_type_ids=student_token_type_ids.to(student_device),
                 attention_mask=student_attention_mask.to(student_device),
                 return_hidden_and_attn=True
@@ -269,32 +271,38 @@ def train_LAD(
             # Drop embedding layer
             teacher_hiddens = teacher_hiddens[1:]
             student_hiddens = student_hiddens[1:]
-            if reverse_gate:
-                teacher_hiddens = teacher_hiddens[::-1]
+            # if reverse_gate:
+            #     teacher_hiddens = teacher_hiddens[::-1]
 
             aggregate_hiddens = []
-            prev = torch.zeros_like(teacher_hiddens[0])
+            # prev = torch.zeros_like(teacher_hiddens[0])
             # Construct aggregate hidden states
-            for t_hidden, gate in zip(teacher_hiddens, gate_networks):
-                agg_hidden = gate(
-                    input1=prev.to(gate_config.device),
-                    input2=t_hidden.to(gate_config.device)
-                )
-                aggregate_hiddens.append(agg_hidden)
-                prev = agg_hidden
+            # for t_hidden, gate in zip(teacher_hiddens, gate_networks):
+            #     agg_hidden = gate(
+            #         input1=prev.to(gate_config.device),
+            #         input2=t_hidden.to(gate_config.device)
+            #     )
+            #     aggregate_hiddens.append(agg_hidden)
+            #     prev = agg_hidden
+            for student_layer_idx, (s_hidden, gate) in enumerate(zip(student_hiddens, gate_networks)):
+              agg_hidden = gate(
+                  student_h=s_hidden.detach(),
+                  teacher_hs=teacher_hiddens
+              )
+              aggregate_hiddens.append(agg_hidden)
 
-            if reverse_gate:
-                aggregate_hiddens = aggregate_hiddens[::-1]
+            # if reverse_gate:
+            #     aggregate_hiddens = aggregate_hiddens[::-1]
 
             for t_index, s_hidden in zip(
-                    teacher_indices,
-                    student_hiddens
-                ):
+                aggregate_hiddens,
+                student_hiddens
+            ):
 
-                batch_hidden_loss = hidden_objective(
-                    teacher_hidden=aggregate_hiddens[t_index].to(student_device),
+                batch_hidden_loss += hidden_objective(
+                    teacher_hidden=aggregate_hiddens,
                     student_hidden=s_hidden,
-                    mu=student_config.hidden_mse_weight
+                    # mu=student_config.hidden_mse_weight
                 ) / student_config.num_hidden_layers
 
                 # Normalize loss.
@@ -346,19 +354,19 @@ def train_LAD(
                 # Log loss and learning rate for each `student_config.log_step`.
                 if step % student_config.log_step == 0:
                     writer.add_scalar(
-                        f'{student_config.task}/{student_config.dataset}/{student_config.model}'+
+                        f'{student_config.task}/{student_config.dataset}/{student_config.model}' +
                         '/loss',
                         loss,
                         step
                     )
                     writer.add_scalar(
-                        f'{student_config.task}/{student_config.dataset}/{student_config.model}'+
+                        f'{student_config.task}/{student_config.dataset}/{student_config.model}' +
                         '/logits_loss',
                         logits_loss,
                         step
                     )
                     writer.add_scalar(
-                        f'{student_config.task}/{student_config.dataset}/{student_config.model}'+
+                        f'{student_config.task}/{student_config.dataset}/{student_config.model}' +
                         '/hidden_loss',
                         hidden_loss,
                         step

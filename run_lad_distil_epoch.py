@@ -83,6 +83,12 @@ if __name__ == "__main__":
         type=int
     )
     parser.add_argument(
+        '--gate_type',
+        choices=['highway', 'dynamic'],
+        default='dynamic',
+        help='Type of gate network to use'
+    )
+    parser.add_argument(
         '--gate_beta1',
         default=0.9,
         help="Gate Network's optimizer: `torch.optim.AdamW`'s beta coefficients.",
@@ -319,8 +325,9 @@ if __name__ == "__main__":
     dataset = fine_tune.util.load_dataset_by_config(
         config=teacher_config
     )
-    total_step = round(len(dataset) / args.batch_size * args.epoch) 
-    warmup_step = round(len(dataset) / args.batch_size * args.epoch * args.warmup_rate)
+    total_step = round(len(dataset) / args.batch_size * args.epoch)
+    warmup_step = round(len(dataset) / args.batch_size *
+                        args.epoch * args.warmup_rate)
 
     if warmup_step == 0:
         warmup_step = 1
@@ -397,7 +404,8 @@ if __name__ == "__main__":
     )
     # Load model from checkpoint.
     logger.info("Load teacher model from given checkpoint: %s", model_name)
-    teacher_model.load_state_dict(torch.load(model_name, map_location=teacher_config.device))
+    teacher_model.load_state_dict(torch.load(
+        model_name, map_location=teacher_config.device))
 
     # Load student model.
     logger.info("Load student model")
@@ -454,8 +462,9 @@ if __name__ == "__main__":
     gate_networks = fine_tune.util.load_gate_networks(
         num_layers=num_layers,
         dimension=gate_config.dimension,
-        seq_length = gate_config.max_seq_length,
-        device=gate_config.device
+        seq_length=gate_config.max_seq_length,
+        device=gate_config.device,
+        gate_type=args.gate_type
     )
 
     logger.info("Load gate networks' optimizer and scheduler")

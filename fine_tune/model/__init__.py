@@ -22,7 +22,7 @@ from typing import Union
 
 from fine_tune.model._student_bert import StudentBert
 from fine_tune.model._teacher_bert import TeacherBert
-from fine_tune.model._gate import HighwayGate
+from fine_tune.model._gate import HighwayGate, DynamicGate
 
 # Define types for type annotation.
 

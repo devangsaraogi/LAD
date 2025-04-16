@@ -18,6 +18,9 @@ import torch
 import torch.nn
 import torch.nn.functional as F
 
+from typing import List
+
+
 def soft_target_loss(
         student_logits: torch.Tensor,
         teacher_logits: torch.Tensor,
@@ -42,9 +45,9 @@ def soft_target_loss(
         soft_loss = F.mse_loss(student_logits, teacher_logits)
     else:
         soft_loss = torch.nn.KLDivLoss(reduction="batchmean")(
-                        F.log_softmax(student_logits, dim=1),
-                        F.softmax(teacher_logits, dim=1)
-                    )
+            F.log_softmax(student_logits, dim=1),
+            F.softmax(teacher_logits, dim=1)
+        )
     return soft_loss
 
 
@@ -113,17 +116,20 @@ def distill_loss(
     if is_regression:
         hard_target_loss = F.mse_loss(student_logits.squeeze(-1), hard_target)
         return (
-            gamma * hard_target_loss + \
-            alpha * soft_target_loss(student_logits, teacher_logits, is_regression)
+            gamma * hard_target_loss +
+            alpha * soft_target_loss(student_logits,
+                                     teacher_logits, is_regression)
         )
     else:
         return (
             gamma * F.cross_entropy(student_logits, hard_target) +
-            alpha * soft_target_loss(student_logits / softmax_temp, teacher_logits / softmax_temp) * pow(softmax_temp, 2)
+            alpha * soft_target_loss(student_logits / softmax_temp,
+                                     teacher_logits / softmax_temp) * pow(softmax_temp, 2)
         )
 
+
 def hidden_MSE_loss(
-        teacher_hidden: torch.Tensor,
+        teacher_hidden: List[torch.Tensor],
         student_hidden: torch.Tensor,
         mu: int = 100,
 ) -> torch.Tensor:

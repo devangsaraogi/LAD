@@ -18,7 +18,7 @@ from __future__ import print_function
 from __future__ import unicode_literals
 
 # typing
-from typing import List
+from typing import List, Union
 
 # 3rd party modules
 
@@ -218,12 +218,14 @@ def load_teacher_model_by_config(
         ptrain_ver=config.ptrain_ver
     )
 
+
 def load_gate_networks(
     num_layers: int,
     dimension: int,
     seq_length: int,
-    device: torch.device
-) -> List[fine_tune.model.HighwayGate]:
+    device: torch.device,
+    gate_type: str = 'dynamic'
+) -> List[Union[fine_tune.model.HighwayGate, fine_tune.model.DynamicGate]]:
     """Return a list of `HighwayGate`.
     The length of list depends on `num_layers`.
 
@@ -243,8 +245,15 @@ def load_gate_networks(
     List[fine_tune.model.HighwayGate]
         A list of `HighwayGate`
     """
+
+    gate_class = (
+        fine_tune.model.DynamicGate
+        if gate_type == 'dynamic'
+        else fine_tune.model.HighwayGate
+    )
+
     gate_networks = [
-        fine_tune.model.HighwayGate(
+        gate_class(
             dimension=dimension,
             seq_length=seq_length
         ).to(device)
