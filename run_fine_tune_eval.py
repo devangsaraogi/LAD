@@ -268,8 +268,9 @@ if __name__ == '__main__':
         )
 #change
         dummy_input = {
-                'input_ids': torch.ones(1, 128, dtype=torch.long).to(config.device),
-                'attention_mask': torch.ones(1, 128, dtype=torch.long).to(config.device)
+            'input_ids': torch.ones(1, 128, dtype=torch.long).to(config.device),
+            'attention_mask': torch.ones(1, 128, dtype=torch.long).to(config.device),
+            'token_type_ids': torch.zeros(1, 128, dtype=torch.long).to(config.device)
         }
 
         with FlopCounterMode(model) as flop_counter:
